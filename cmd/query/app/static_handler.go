@@ -39,7 +39,9 @@ var (
 	staticRootFiles = []string{favoriteIcon}
 
 	// The following patterns are searched and replaced in the index.html as a way of customizing the UI.
-	configPattern   = regexp.MustCompile("JAEGER_CONFIG *= *DEFAULT_CONFIG;")
+	configPattern = regexp.MustCompile("JAEGER_CONFIG *= *DEFAULT_CONFIG;")
+	// configPattern   = regexp.MustCompile(`(?im)(^\s+)const\s+JAEGER_CONFIG(\s+)?=(\s+)?DEFAULT_CONFIG;?`)
+	configJsPattern = regexp.MustCompile(`(?im)(^\s+)\/\/.*JAEGER_CONFIG_JS.*\n.*`)
 	versionPattern  = regexp.MustCompile("JAEGER_VERSION *= *DEFAULT_VERSION;")
 	basePathPattern = regexp.MustCompile(`<base href="/"`) // Note: tag is not closed
 )
@@ -71,6 +73,12 @@ type StaticAssetsHandlerOptions struct {
 	BasePath     string
 	UIConfigPath string
 	Logger       *zap.Logger
+}
+
+// UIConfigOptions define options for injecting config in index.html in loadAndEnrichIndexHTML
+type UIConfigOptions struct {
+	regexp *regexp.Regexp
+	config []byte
 }
 
 // NewStaticAssetsHandler returns a StaticAssetsHandler
@@ -106,13 +114,11 @@ func loadAndEnrichIndexHTML(open func(string) (http.File, error), options Static
 		return nil, fmt.Errorf("cannot load index.html: %w", err)
 	}
 	// replace UI config
-	configString := "JAEGER_CONFIG = DEFAULT_CONFIG"
-	if configBytes, err := loadUIConfig(options.UIConfigPath); err != nil {
+	if configObject, err := loadUIConfig(options.UIConfigPath); err != nil {
 		return nil, err
-	} else if configBytes != nil {
-		configString = fmt.Sprintf("JAEGER_CONFIG = %v", string(configBytes))
+	} else if configObject != nil {
+		indexBytes = configObject.regexp.ReplaceAll(indexBytes, append([]byte(`${1}`), configObject.config...))
 	}
-	indexBytes = configPattern.ReplaceAll(indexBytes, []byte(configString+";"))
 	// replace Jaeger version
 	versionJSON, _ := json.Marshal(version.Get())
 	versionString := fmt.Sprintf("JAEGER_VERSION = %s;", string(versionJSON))
@@ -207,7 +213,7 @@ func loadIndexHTML(open func(string) (http.File, error)) ([]byte, error) {
 	return indexBytes, nil
 }
 
-func loadUIConfig(uiConfig string) ([]byte, error) {
+func loadUIConfig(uiConfig string) (*UIConfigOptions, error) {
 	if uiConfig == "" {
 		return nil, nil
 	}
@@ -219,14 +225,17 @@ func loadUIConfig(uiConfig string) ([]byte, error) {
 
 	var c map[string]interface{}
 	var r []byte
+	var re *regexp.Regexp
 	var unmarshal func([]byte, interface{}) error
 
 	switch strings.ToLower(ext) {
 	case ".json":
 		unmarshal = json.Unmarshal
+		re = configPattern
 	case ".js":
 		r = bytes.TrimSpace(bytesConfig)
-		if !bytes.HasPrefix(r, []byte("function")) {
+		re = configJsPattern
+		if !bytes.Contains(r, []byte("function UIConfig()")) {
 			return nil, fmt.Errorf("wrong JS function format in UI config file format %v", uiConfig)
 		}
 	default:
@@ -243,9 +252,10 @@ func loadUIConfig(uiConfig string) ([]byte, error) {
 		if r, err = json.Marshal(c); err != nil {
 			return nil, fmt.Errorf("cannot encode UI config file %v: %w", uiConfig, err)
 		}
+		r = append([]byte("JAEGER_CONFIG = "), append(r, byte(';'))...)
 	}
 
-	return r, nil
+	return &UIConfigOptions{regexp: re, config: r}, nil
 }
 
 // RegisterRoutes registers routes for this handler on the given router
