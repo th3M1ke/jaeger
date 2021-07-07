@@ -5,7 +5,7 @@ go 1.16
 require (
 	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
 	github.com/Shopify/sarama v1.29.0
-	github.com/apache/thrift v0.14.1
+	github.com/apache/thrift v0.14.2
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d // indirect
 	github.com/bsm/sarama-cluster v2.1.13+incompatible
 	github.com/crossdock/crossdock-go v0.0.0-20160816171116-049aabb0122b
@@ -43,7 +43,7 @@ require (
 	github.com/opentracing-contrib/go-stdlib v0.0.0-20190519235532-cf7a6c988dc9
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/prometheus/client_golang v1.5.1
-	github.com/prometheus/common v0.10.0 // indirect
+	github.com/prometheus/common v0.10.0
 	github.com/prometheus/procfs v0.1.3 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/securego/gosec v0.0.0-20200203094520-d13bb6d2420c
